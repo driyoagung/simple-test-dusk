@@ -3,46 +3,50 @@
 namespace Tests;
 
 use Facebook\WebDriver\Chrome\ChromeOptions;
-use Facebook\WebDriver\Remote\DesiredCapabilities;
 use Facebook\WebDriver\Remote\RemoteWebDriver;
-use Illuminate\Support\Collection;
+use Facebook\WebDriver\Remote\DesiredCapabilities;
 use Laravel\Dusk\TestCase as BaseTestCase;
-use PHPUnit\Framework\Attributes\BeforeClass;
 
 abstract class DuskTestCase extends BaseTestCase
 {
-    /**
-     * Prepare for Dusk test execution.
-     */
-    #[BeforeClass]
-    public static function prepare(): void
+    protected function setUp(): void
     {
-        if (! static::runningInSail()) {
-            static::startChromeDriver(['--port=9515']);
-        }
+        parent::setUp();
+
+        // Clear session dan cache
+        $this->artisan('config:clear');
+        $this->artisan('view:clear');
+        $this->artisan('cache:clear');
+
+        // Migrate database
+        $this->artisan('migrate:fresh');
     }
 
-    /**
-     * Create the RemoteWebDriver instance.
-     */
     protected function driver(): RemoteWebDriver
     {
-        $options = (new ChromeOptions)->addArguments(collect([
-            $this->shouldStartMaximized() ? '--start-maximized' : '--window-size=1920,1080',
-            '--disable-search-engine-choice-screen',
-            '--disable-smooth-scrolling',
-        ])->unless($this->hasHeadlessDisabled(), function (Collection $items) {
-            return $items->merge([
-                '--disable-gpu',
-                '--headless=new',
-            ]);
-        })->all());
+        $options = (new ChromeOptions)->addArguments([
+            '--disable-gpu',
+            // '--headless=new', // COMMENT DULU untuk debug
+            '--no-sandbox',
+            '--disable-dev-shm-usage',
+            '--window-size=1920,1080',
+            '--disable-web-security',
+            '--allow-running-insecure-content',
+        ]);
 
         return RemoteWebDriver::create(
-            $_ENV['DUSK_DRIVER_URL'] ?? env('DUSK_DRIVER_URL') ?? 'http://localhost:9515',
+            'http://localhost:9515',
             DesiredCapabilities::chrome()->setCapability(
-                ChromeOptions::CAPABILITY, $options
+                ChromeOptions::CAPABILITY,
+                $options
             )
         );
+    }
+
+    public static function prepare(): void
+    {
+        if (!static::runningInSail()) {
+            static::startChromeDriver();
+        }
     }
 }
